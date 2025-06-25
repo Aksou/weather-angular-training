@@ -1,22 +1,22 @@
-import {Component, inject, Signal} from '@angular/core';
-import {WeatherService} from "../weather.service";
-import {LocationService} from "../location.service";
+import {ChangeDetectionStrategy, Component, inject, input} from '@angular/core';
 import {Router} from "@angular/router";
 import {ConditionsAndZip} from '../conditions-and-zip.type';
+import { WeatherService } from 'app/weather.service';
 
 @Component({
   selector: 'app-current-conditions',
   templateUrl: './current-conditions.component.html',
-  styleUrls: ['./current-conditions.component.css']
+  styleUrl: './current-conditions.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class CurrentConditionsComponent {
 
-  private weatherService = inject(WeatherService);
+  protected weatherService = inject(WeatherService);
   private router = inject(Router);
-  protected locationService = inject(LocationService);
-  protected currentConditionsByZip: Signal<ConditionsAndZip[]> = this.weatherService.getCurrentConditions();
-
-  showForecast(zipcode : string){
+  
+  protected location = input<ConditionsAndZip>()
+  
+  protected showForecast(zipcode : string){
     this.router.navigate(['/forecast', zipcode])
   }
 }

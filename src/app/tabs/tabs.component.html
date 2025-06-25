@@ -1,0 +1,19 @@
+<div class="tabs-container">
+    <div class="tab-headers">
+        @for (tab of tabs(); track tab.id()) {
+            <button 
+                class="tab-header" 
+                (click)="updateActiveTab(tab.id())"
+                [class.active]="tab.display()"
+            >
+                <span class="text-truncate me-2">{{tab.title()}}</span>
+                <button class="btn-close close" (click)="handleTabCloseFn()(tab.id())">&times;</button>
+            </button>
+        }
+        @empty {
+            No tabs to display.
+        }
+    </div>
+    <ng-content></ng-content>
+</div>    
+  

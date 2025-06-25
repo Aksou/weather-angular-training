@@ -1,10 +1,17 @@
-import {Injectable, Signal, signal} from '@angular/core';
-import {Observable} from 'rxjs';
+import { LocalStorageService } from './local-storage.service';
+import { LocationService } from './location.service';
+import {effect, Injectable, Signal, signal, untracked} from '@angular/core';
+import { Observable, throwError } from 'rxjs';
 
-import {HttpClient} from '@angular/common/http';
-import {CurrentConditions} from './current-conditions/current-conditions.type';
-import {ConditionsAndZip} from './conditions-and-zip.type';
-import {Forecast} from './forecasts-list/forecast.type';
+
+import { HttpClient } from '@angular/common/http';
+import { CurrentConditions } from './current-conditions/current-conditions.type';
+import { ConditionsAndZip } from './conditions-and-zip.type';
+import { Forecast } from './forecasts-list/forecast.type';
+import { catchError } from 'rxjs/operators';
+
+const CONDITIONS: string = "conditions";
+const FORECASTS: string = "forecasts";
 
 @Injectable()
 export class WeatherService {
@@ -14,35 +21,67 @@ export class WeatherService {
   static ICON_URL = 'https://raw.githubusercontent.com/udacity/Sunshine-Version-2/sunshine_master/app/src/main/res/drawable-hdpi/';
   private currentConditions = signal<ConditionsAndZip[]>([]);
 
-  constructor(private http: HttpClient) { }
+  constructor(
+    private readonly http: HttpClient, 
+    private readonly locationService: LocationService,
+    private readonly localStorageService: LocalStorageService) {
 
-  addCurrentConditions(zipcode: string): void {
-    // Here we make a request to get the current conditions data from the API. Note the use of backticks and an expression to insert the zipcode
-    this.http.get<CurrentConditions>(`${WeatherService.URL}/weather?zip=${zipcode},us&units=imperial&APPID=${WeatherService.APPID}`)
-      .subscribe(data => this.currentConditions.update(conditions => [...conditions, {zip: zipcode, data}]));
-  }
+    effect(_ => {
+      const conditions = untracked(this.currentConditions);
+      const locations = locationService.getCurrentLocations()();
+      this.onLocationsUpdate(conditions, locations);
+    },
+    {
+      allowSignalWrites: true,
+    });
+   }
 
-  removeCurrentConditions(zipcode: string) {
-    this.currentConditions.update(conditions => {
-      for (let i in conditions) {
-        if (conditions[i].zip == zipcode)
-          conditions.splice(+i, 1);
+  private onLocationsUpdate(conditions: ConditionsAndZip[], locations: string[]): void {
+    // Add missing conditions according to locations cache
+    locations.forEach(currLoc => {
+      if (!conditions.some(cond => cond.zip === currLoc)) {
+        this.addCurrentConditions(currLoc);
       }
-      return conditions;
+    })
+
+    // Remove conditions which are not in locations cache
+    conditions.forEach(condition => {
+      if (!locations.includes(condition.zip)) {
+        this.removeCurrentConditions(condition.zip);
+      }
     })
   }
 
-  getCurrentConditions(): Signal<ConditionsAndZip[]> {
+  public addCurrentConditions(zipcode: string): void {
+    const src$ = this.http.get<CurrentConditions>(`${WeatherService.URL}/weather?zip=${zipcode},us&units=imperial&APPID=${WeatherService.APPID}`).pipe(
+      catchError(error => {
+        console.error(`Error fetching conditions for zip: ${zipcode}, removing of associated location ongoing`);
+        this.locationService.removeLocation(zipcode);
+        return throwError(() => error);
+      })
+    );
+    this.localStorageService.getData<CurrentConditions>(zipcode.concat(CONDITIONS), src$).subscribe((data) => this.updateCurrentCondtions(zipcode, data))
+  }
+
+  public updateCurrentCondtions(zipcode: string, data: CurrentConditions) {
+    this.currentConditions.update(conditions => [...conditions, {zip: zipcode, data}])
+  }
+
+  public removeCurrentConditions(zipcode: string) {
+    this.localStorageService.remove(zipcode);
+    this.currentConditions.update(conditions => conditions.filter(condition => condition.zip !== zipcode));
+  }
+
+  public getCurrentConditions(): Signal<ConditionsAndZip[]> {
     return this.currentConditions.asReadonly();
   }
 
-  getForecast(zipcode: string): Observable<Forecast> {
-    // Here we make a request to get the forecast data from the API. Note the use of backticks and an expression to insert the zipcode
-    return this.http.get<Forecast>(`${WeatherService.URL}/forecast/daily?zip=${zipcode},us&units=imperial&cnt=5&APPID=${WeatherService.APPID}`);
-
+  public getForecast(zipcode: string): Observable<Forecast> {
+    const src$ = this.http.get<Forecast>(`${WeatherService.URL}/forecast/daily?zip=${zipcode},us&units=imperial&cnt=5&APPID=${WeatherService.APPID}`);
+    return this.localStorageService.getData<Forecast>(zipcode.concat(FORECASTS), src$);
   }
 
-  getWeatherIcon(id): string {
+  public getWeatherIcon(id): string {
     if (id >= 200 && id <= 232)
       return WeatherService.ICON_URL + "art_storm.png";
     else if (id >= 501 && id <= 511)

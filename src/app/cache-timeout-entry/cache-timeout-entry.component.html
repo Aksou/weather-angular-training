@@ -1,0 +1,8 @@
+<div class="well">
+  <h2>Enter a timeout:</h2>
+  <input type="number" min="0" step="1" #timeout placeholder="Cache Timeout" class="form-control">
+  <br>
+  <button class="btn btn-primary" (click)="updateCacheTimeout(timeout.value)" >
+    Add timeout
+  </button>
+</div>

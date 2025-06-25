@@ -1,6 +1,11 @@
 <div class="container-fluid">
-
+  <app-cache-timeout-entry></app-cache-timeout-entry>
   <app-zipcode-entry> </app-zipcode-entry>
-  <app-current-conditions></app-current-conditions>
-
+  <app-tabs [handleTabCloseFn]="handleTabCloseFn.bind(this)">
+    @for (condition of this.weatherService.getCurrentConditions()(); track condition.zip) {
+      <app-tab [id]="condition.zip" [title]="condition.data.name + ' (' + condition.zip + ')'">
+        <app-current-conditions [location]="condition"></app-current-conditions>
+      </app-tab>
+    }
+  </app-tabs>
 </div>
